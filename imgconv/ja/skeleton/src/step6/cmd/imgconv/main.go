@@ -42,6 +42,7 @@ func convert(dst, src string) error {
 	}
 
 	// TODO: _imgを埋め込んだ、imgconv.Image型の値を作る
+	img := imgconv.Image{_img}
 
 	if clip != "" {
 		if err := img.Clip(clip); err != nil {

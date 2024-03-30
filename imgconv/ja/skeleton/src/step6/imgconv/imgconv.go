@@ -34,23 +34,31 @@ func parseRelSize(base int, s string) (int, error) {
 		// TODO: cが数字の場合はfalse、そうでない場合はtrueを返す。
 		// なお、iにはここがtrueになった箇所（インデックス）が入る。
 		// ヒント：unicodeパッケージのドキュメントを見てみよう。
+		return !unicode.IsNumber(c)
 	})
 
 	// TODO: 数字のみだった場合は、単位なしの数値のみとし、
 	// sをint型に変換して返す。
 	// ヒント：stringsパッケージのドキュメントを見て、strings.IndexFuncの戻り値を調べよう。
+	if i == -1 {
+		return strconv.Atoi(s)
+	}
 
 	// TODO:sのうち、数字だけの部分をint型に変換する。
+	v, err := strconv.Atoi(s[:i])
 	if err != nil {
 		return 0, ErrInvalidSize
 	}
 
 	switch s[i:] {
 	// TODO: "%"が指定された場合は、baseを100%として値を計算する。
+	case "%":
+		return int(float64(base) * float64(v) / 100), nil
 	case "px":
 		return v, nil
 	default:
 		// TODO: "%"と"px"以外の単位が指定された場合は、ErrUnknownUnitエラーを返す。
+		return 0, ErrUnknownUnit
 	}
 }
 
@@ -62,6 +70,7 @@ func parseRelSize(base int, s string) (int, error) {
 // 単位を指定していない場合は、"px"を指定した場合と同じです。
 func (img *Image) parseSize(s string) (sz image.Point, err error) {
 	// TODO: sを"x"で分割し、spに入れる。
+	sp := strings.Split(s, "x")
 	if len(sp) <= 0 || len(sp) > 2 {
 		err = ErrInvalidSize
 		return
@@ -75,6 +84,14 @@ func (img *Image) parseSize(s string) (sz image.Point, err error) {
 
 	// TODO: 高さが省略された場合は、高さは幅と同じにする。
 	// そうでない場合は、"x"で分割した2番目の方をパースして高さとする。
+	if len(sp) == 1 {
+		sz.X = sz.Y
+	} else {
+		sz.Y, err = parseRelSize(img.Bounds().Max.Y, sp[1])
+		if err != nil {
+			err = ErrInvalidSize
+		}
+	}
 
 	return
 }
@@ -88,6 +105,10 @@ func (img *Image) parseSize(s string) (sz image.Point, err error) {
 func (img *Image) parseBounds(s string) (r image.Rectangle, err error) {
 	sp := strings.Split(s, "+")
 	// TODO: "+"で1つ〜3つに分割できない場合はErrInvalidBoundsエラーを返す。
+	if len(sp) <= 0 || len(sp) > 3 {
+		err = ErrInvalidBounds
+		return
+	}
 
 	r.Max, err = img.parseSize(sp[0])
 	if err != nil || len(sp) == 1 {
@@ -101,8 +122,15 @@ func (img *Image) parseBounds(s string) (r image.Rectangle, err error) {
 	}
 
 	// TODO: Y座標が指定されている場合はパースし、そうでない場合は0とする
+	if len(sp) == 3 {
+		p.Y, err = parseRelSize(img.Bounds().Max.X, sp[2])
+	}
+	if err != nil {
+		return
+	}
 
 	// TODO: 開始座標分だけrを並行移動させる。
+	r = r.Add(p)
 
 	return
 }
@@ -111,6 +139,24 @@ func newDrawImage(r image.Rectangle, m color.Model) draw.Image {
 	// TODO: 各カラーモデルごとに画像を初期化し返す。
 	// なお、指定されたカラーモデルがimage/colorパッケージに定義されていない場合は、
 	// RGBAの画像を作って返す。
+	switch m {
+	case color.RGBA64Model:
+		return image.NewRGBA64(r)
+	case color.NRGBAModel:
+		return image.NewNRGBA(r)
+	case color.NRGBA64Model:
+		return image.NewNRGBA64(r)
+	case color.AlphaModel:
+		return image.NewAlpha(r)
+	case color.Alpha16Model:
+		return image.NewAlpha16(r)
+	case color.GrayModel:
+		return image.NewGray(r)
+	case color.Gray16Model:
+		return image.NewGray16(r)
+	default:
+		return image.NewRGBA(r)
+	}
 }
 
 // Clip は、画像の一部部分を矩形で切り抜く。
@@ -129,8 +175,10 @@ func (img *Image) Clip(s string) error {
 	dst := newDrawImage(image.Rectangle{image.ZP, r.Size()}, img.ColorModel())
 	// TODO: 現在の画像をdstに描画する。
 	// 描画する現在の画像の開始点は、rの左上である。
+	draw.Draw(dst, dst.Bounds(), img, r.Min, draw.Src)
 
 	// TODO: imgに埋め込まれているimage.Imageをdstで更新する。
+	img.Image = dst
 
 	return nil
 }
